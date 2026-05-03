@@ -394,13 +394,7 @@ const PS_MAIN_COLS=[
   ["toolGroupLetter",              f=>f.grouping||AUTO_GROUP[f.toolType]||"M"],
   ["pitch",                        f=>f.pitch||""],
   ["fluteType",                    f=>f.fluteType||""],
-  ["lengthBelowShankDiameter",     f=>{
-    const loc=parseFloat(f.loc)||0;
-    const sl =parseFloat(f.shoulderLen)||0;
-    const ooh=parseFloat(f.ooh)||0;
-    const shoulder = (sl&&sl>=loc) ? sl : loc;
-    return String((ooh&&ooh>=shoulder) ? ooh : shoulder);
-  }],
+  ["lengthBelowShankDiameter",     f=>f.ooh ? String(parseFloat(f.ooh)) : ""],
   ["tapClass",                     f=>f.tapClass||""],
   ["threadsPerInch",               f=>calcTPI(f.pitch)||""],
   ["thread",                       f=>f.pitch||""],
@@ -496,16 +490,16 @@ function buildSYS(){
   "shankDia":"shank diameter decimal inches",
   "cornerRadius":"0 for square, half-dia for ball, actual CR for bull nose",
   "material":"carbide|hss|cobalt|ceramic",
-  "coating":"UC|AlTiN|TiAlN|TiN|ZrN|DLC or empty. RULES: Uncoated/Bright/Bright-Uncoated/Uncoated Carbide/No Coating → UC. Specific coating name → that coating. Unknown → empty.",
+  "coating":"Exact coating name as stated on the product page. Normalize: Uncoated/Bright/Bright-Uncoated/Uncoated Carbide/No Coating → UC. Otherwise copy verbatim (e.g. AlTiN, TiSiN, TICN, Zrn). Empty if not stated.",
   "workpieceMats":"Array of ISO material codes the tool is designed for. N=Aluminum/Non-ferrous, M=Stainless Steel, P=Steel, S=High Temp Alloys (titanium, inconel, nickel alloys), K=Cast Iron. Return an array of applicable codes in priority order (primary first), e.g. [\"N\"] or [\"P\",\"M\"]. Empty array if unknown.",
   "tipAngle":"included tip/point angle degrees for drills, chamfers, spot drills — else empty",
   "helixAngle":"helix angle degrees if visible else empty",
   "pitch":"size x pitch for taps else empty",
   "productLink":"url if visible else empty",
   "edpNumber":"manufacturer Mfr# or EDP# — NOT the distributor stock number. On MSC pages use Mfr# not MSC#.",
-  "approvedBrand":"company that MANUFACTURED the tool — NOT the distributor.",
+  "approvedBrand":"manufacturer of the tool — NOT the distributor. Must exactly match one of: ${VENDOR_LIST_STR}. Leave empty if not confident or not in the list.",
   "vendorStockNum":"distributor's own catalog/stock number (e.g. MSC# on MSC pages). Empty if not found.",
-  "vendor":"company SELLING this tool. Match to: ${VENDOR_LIST_STR}. MSC/mscdirect.com=MSC Industrial, McMaster=McMaster-Carr.",
+  "vendor":"company SELLING this tool. Must exactly match one of: ${VENDOR_LIST_STR}. MSC/mscdirect.com=MSC Industrial, McMaster=McMaster-Carr. Leave empty if not confident or not in the list.",
   "coolant":"flood|disabled|mist|through tool|air|air through tool|suction|flood and mist|flood and through tool — default flood",
   "centerCutting":true or false,
   "fluteType":"Roughing|Semi-Finishing|Finishing|Yes|No or manufacturer word for flute style. Empty if not mentioned.",
@@ -763,8 +757,10 @@ export default function App(){
           : (WM.includes(p.workpieceMat)?[p.workpieceMat]:[]),
         tipAngle:     p.tipAngle||"",helixAngle:p.helixAngle||"",
         pitch:        p.pitch||"",productLink:p.productLink||"",
-        edpNumber:    p.edpNumber||"",approvedBrand:p.approvedBrand||"",
-        vendor:       p.vendor||"",vendorStockNum:p.vendorStockNum||"",
+        edpNumber:    p.edpNumber||"",
+        approvedBrand:VENDOR_LIST.includes(p.approvedBrand)?p.approvedBrand:"",
+        vendor:       VENDOR_LIST.includes(p.vendor)?p.vendor:"",
+        vendorStockNum:p.vendorStockNum||"",
         coolant:      validCoolants.includes(p.coolant)?p.coolant:"flood",
         centerCutting:!!p.centerCutting,fluteType:p.fluteType||"",cost:p.cost||"",
         tapClass:     p.tapClass||"",pointType:p.pointType||"",
@@ -974,9 +970,8 @@ export default function App(){
             </div>}
             {isVis("coating")&&<div style={{...C(3),opacity:isOpt("coating")?0.55:1}}>
               <FL type="both" label="Coating"/>
-              <select style={sel(hi("coating"))} value={F.coating} onChange={e=>sf("coating",e.target.value)}>
-                {CO.map(c=><option key={c} value={c} style={{background:T.inputBg}}>{c||"— none / UC"}</option>)}
-              </select>
+              <input style={inp(hi("coating"))} list="coating-opts" value={F.coating} onChange={e=>sf("coating",e.target.value)} placeholder="e.g. AlTiN, TiN, UC"/>
+              <datalist id="coating-opts">{CO.filter(c=>c).map(c=><option key={c} value={c}/>)}</datalist>
             </div>}
             {isVis("workpieceMats")&&<div style={{...C(3),opacity:isOpt("workpieceMats")?0.55:1}}>
               <FL type="both" label="Workpiece Mat"/>
@@ -1022,7 +1017,7 @@ export default function App(){
             {isVis("centerCutting")&&<div style={{...C(3),opacity:isOpt("centerCutting")?0.55:1}}>
               <FL type="proshop" label="Center Cutting"/>
               <div style={{height:27,display:"flex",alignItems:"center",border:`1px solid ${T.border}`,borderRadius:"0 0 4px 4px",padding:"0 7px",background:T.inputBg}}>
-                <Toggle value={F.centerCutting} onChange={v=>sf("centerCutting",v)} label={F.centerCutting?"Yes":"No"}/>
+                <Toggle value={F.centerCutting} onChange={v=>sf("centerCutting",v)} label={F.centerCutting?"Y":"N"}/>
               </div>
             </div>}
             {isVis("stubJobber")&&<div style={{...C(3),opacity:isOpt("stubJobber")?0.55:1}}>
@@ -1076,8 +1071,20 @@ export default function App(){
           {(isVis("edpNumber")||isVis("approvedBrand")||isVis("vendor")||isVis("vendorStockNum")||isVis("cost")||isVis("productLink"))&&<GroupDiv label="Purchasing & Identity"/>}
           <div style={G}>
             {isVis("edpNumber")&&<div style={{...C(4),opacity:isOpt("edpNumber")?0.55:1}}><FL type="both" label="EDP# / Mfr #"/><input style={inp(hi("edpNumber"))} value={F.edpNumber} onChange={e=>sf("edpNumber",e.target.value)} placeholder="e.g. VGM3-0025"/></div>}
-            {isVis("approvedBrand")&&<div style={{...C(4),opacity:isOpt("approvedBrand")?0.55:1}}><FL type="proshop" label="Manufacturer / Brand"/><input style={inp(hi("approvedBrand"))} value={F.approvedBrand} onChange={e=>sf("approvedBrand",e.target.value)} placeholder="e.g. OSG, Helical"/></div>}
-            {isVis("vendor")&&<div style={{...C(4),opacity:isOpt("vendor")?0.55:1}}><FL type="proshop" label="Vendor / Distributor"/><input style={inp(hi("vendor"))} value={F.vendor} onChange={e=>sf("vendor",e.target.value)} placeholder="e.g. MSC Industrial"/></div>}
+            {isVis("approvedBrand")&&<div style={{...C(4),opacity:isOpt("approvedBrand")?0.55:1}}>
+              <FL type="proshop" label="Manufacturer / Brand"/>
+              <select style={sel(hi("approvedBrand"))} value={F.approvedBrand} onChange={e=>sf("approvedBrand",e.target.value)}>
+                <option value="" style={{background:T.inputBg}}>— select —</option>
+                {VENDOR_LIST.map(v=><option key={v} value={v} style={{background:T.inputBg}}>{v}</option>)}
+              </select>
+            </div>}
+            {isVis("vendor")&&<div style={{...C(4),opacity:isOpt("vendor")?0.55:1}}>
+              <FL type="proshop" label="Vendor / Distributor"/>
+              <select style={sel(hi("vendor"))} value={F.vendor} onChange={e=>sf("vendor",e.target.value)}>
+                <option value="" style={{background:T.inputBg}}>— select —</option>
+                {VENDOR_LIST.map(v=><option key={v} value={v} style={{background:T.inputBg}}>{v}</option>)}
+              </select>
+            </div>}
             {isVis("vendorStockNum")&&<div style={{...C(4),opacity:isOpt("vendorStockNum")?0.55:1}}><FL type="proshop" label="Vendor Stock #"/><input style={inp(hi("vendorStockNum"))} value={F.vendorStockNum} onChange={e=>sf("vendorStockNum",e.target.value)} placeholder="e.g. 48667943"/></div>}
             {isVis("cost")&&<div style={{...C(4),opacity:isOpt("cost")?0.55:1}}><FL type="proshop" label="Cost / Price ($)"/><input style={inp(hi("cost"))} value={F.cost} onChange={e=>sf("cost",e.target.value)} placeholder="48.99" type="number" step="0.01" min="0"/></div>}
             {isVis("productLink")&&<div style={{...C(4),opacity:isOpt("productLink")?0.55:1}}><FL type="fusion" label="Product Link"/><input style={inp(hi("productLink"))} value={F.productLink} onChange={e=>sf("productLink",e.target.value)} placeholder="https://..."/></div>}
@@ -1119,6 +1126,7 @@ export default function App(){
 
       <style>{`
         @keyframes spin{to{transform:rotate(360deg)}}
+        html,body{margin:0;padding:0;background:#1a1a1a;}
         *{box-sizing:border-box;}
         input::placeholder{color:${T.ph};font-size:11px;}
         textarea::placeholder{color:${T.ph};}
