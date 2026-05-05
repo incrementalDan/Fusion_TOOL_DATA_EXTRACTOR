@@ -393,13 +393,7 @@ const PS_MAIN_COLS=[
   ["toolGroupLetter",              f=>f.grouping||AUTO_GROUP[f.toolType]||"M"],
   ["pitch",                        f=>f.pitch||""],
   ["fluteType",                    f=>f.fluteType||""],
-  ["lengthBelowShankDiameter",     f=>{
-    const loc=parseFloat(f.loc)||0;
-    const sl =parseFloat(f.shoulderLen)||0;
-    const ooh=parseFloat(f.ooh)||0;
-    const shoulder = (sl&&sl>=loc) ? sl : loc;
-    return String((ooh&&ooh>=shoulder) ? ooh : shoulder);
-  }],
+  ["lengthBelowShankDiameter",     f=>f.ooh ? String(parseFloat(f.ooh)) : ""],
   ["tapClass",                     f=>f.tapClass||""],
   ["threadsPerInch",               f=>calcTPI(f.pitch)||""],
   ["thread",                       f=>f.pitch||""],
@@ -482,6 +476,61 @@ const WML={"":"—","N":"N — Aluminum","M":"M — Stainless Steel","P":"P — 
 const CO=["","UC","AlTiN","TiAlN","TiN","ZrN","DLC"];
 const MA=["carbide","hss","cobalt","ceramic"];
 
+// ─── FIELD VISIBILITY ─────────────────────────────────────────────────────────
+// Tool type key order (25 types — matches array indices below)
+const _FV_KEYS=["flat end mill","ball end mill","bull nose end mill","tapered mill","radius mill","form mill","face mill","chamfer mill","dovetail","lollipop mill","slot/key cutter","thread mill","circle segment barrel","circle segment lens","circle segment oval","circle segment taper","drill","center drill","spot drill","reamer","counter bore","counter sink","tap form","boring head","turning general"];
+const FIELD_VISIBILITY={
+  toolType:       [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  grouping:       [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  diameter:       [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  loc:            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
+  oal:            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  shankDia:       [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+  shoulderLen:    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+  ooh:            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+  cornerRadius:   [0,0,1,1,1,0,0,0,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+  tipAngle:       [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,1,1,0,0,1,0,0,0],
+  taperAngle:     [0,0,0,1,0,0,1,1,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0],
+  tipDiameter:    [0,0,0,0,0,0,0,1,1,0,0,1,0,0,0,1,0,1,1,0,0,1,1,0,0],
+  lowerRadius:    [0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0],
+  upperRadius:    [0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0],
+  profileRadius:  [0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,0,0,0,0,0,0,0,0,0],
+  axialDistance:  [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0],
+  material:       [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+  coating:        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+  workpieceMats:  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,"o",1,1],
+  coolant:        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  flutes:         [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+  helixAngle:     [1,1,1,1,1,1,0,0,0,1,1,1,0,0,0,0,1,0,0,0,0,0,0,0,0],
+  fluteType:      [1,1,1,1,1,1,0,0,0,1,1,0,0,0,0,0,"o",0,0,0,0,0,0,0,0],
+  centerCutting:  [1,1,1,1,0,"o",0,1,0,1,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0],
+  cuttingDirection:[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  backsideCapable:[0,0,0,0,0,1,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,0],
+  doubleEnded:    [1,1,1,1,1,0,1,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0],
+  fullProfile:    [0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  stubJobber:     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0],
+  pitch:          [0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0],
+  tapClass:       [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0],
+  minThreadPitch: [0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  maxThreadPitch: [0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  pointType:      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1,1,0,0],
+  edpNumber:      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  approvedBrand:  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  vendor:         [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  vendorStockNum: [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  cost:           [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  productLink:    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  presetName:     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  toolNumber:     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+};
+function getVisibleFields(toolType){
+  const idx=_FV_KEYS.indexOf(toolType);
+  if(idx<0) return Object.keys(FIELD_VISIBILITY).map(key=>({key,optional:false}));
+  return Object.entries(FIELD_VISIBILITY)
+    .filter(([,v])=>v[idx]!==0&&v[idx]!==false)
+    .map(([key,v])=>({key,optional:v[idx]==="o"||v[idx]==="optional"}));
+}
+
 // ─── AI PROMPT ────────────────────────────────────────────────────────────────
 const VENDOR_LIST_STR=VENDOR_LIST.join(", ");
 function buildSYS(){
@@ -495,16 +544,16 @@ function buildSYS(){
   "shankDia":"shank diameter decimal inches",
   "cornerRadius":"0 for square, half-dia for ball, actual CR for bull nose",
   "material":"carbide|hss|cobalt|ceramic",
-  "coating":"UC|AlTiN|TiAlN|TiN|ZrN|DLC or empty. RULES: Uncoated/Bright/Bright-Uncoated/Uncoated Carbide/No Coating → UC. Specific coating name → that coating. Unknown → empty.",
+  "coating":"Exact coating name as stated on the product page. Normalize: Uncoated/Bright/Bright-Uncoated/Uncoated Carbide/No Coating → UC. Otherwise copy verbatim (e.g. AlTiN, TiSiN, TICN, ZrN). Empty if not stated.",
   "workpieceMats":"Array of ISO material codes the tool is designed for. N=Aluminum/Non-ferrous, M=Stainless Steel, P=Steel, S=High Temp Alloys (titanium, inconel, nickel alloys), K=Cast Iron. Return an array of applicable codes in priority order (primary first), e.g. [\"N\"] or [\"P\",\"M\"]. Empty array if unknown.",
   "tipAngle":"included tip/point angle degrees for drills, chamfers, spot drills — else empty",
   "helixAngle":"helix angle degrees if visible else empty",
   "pitch":"size x pitch for taps else empty",
   "productLink":"url if visible else empty",
   "edpNumber":"manufacturer Mfr# or EDP# — NOT the distributor stock number. On MSC pages use Mfr# not MSC#.",
-  "approvedBrand":"company that MANUFACTURED the tool — NOT the distributor.",
+  "approvedBrand":"manufacturer of the tool — NOT the distributor. Must exactly match one of: ${VENDOR_LIST_STR}. Leave empty if not confident or not in the list.",
   "vendorStockNum":"distributor's own catalog/stock number (e.g. MSC# on MSC pages). Empty if not found.",
-  "vendor":"company SELLING this tool. Match to: ${VENDOR_LIST_STR}. MSC/mscdirect.com=MSC Industrial, McMaster=McMaster-Carr.",
+  "vendor":"company SELLING this tool. Must exactly match one of: ${VENDOR_LIST_STR}. MSC/mscdirect.com=MSC Industrial, McMaster=McMaster-Carr. Leave empty if not confident or not in the list.",
   "coolant":"flood|disabled|mist|through tool|air|air through tool|suction|flood and mist|flood and through tool — default flood",
   "centerCutting":true or false,
   "fluteType":"Roughing|Semi-Finishing|Finishing|Yes|No or manufacturer word for flute style. Empty if not mentioned.",
@@ -759,8 +808,10 @@ export default function App(){
           : (WM.includes(p.workpieceMat)?[p.workpieceMat]:[]),
         tipAngle:     p.tipAngle||"",helixAngle:p.helixAngle||"",
         pitch:        p.pitch||"",productLink:p.productLink||"",
-        edpNumber:    p.edpNumber||"",approvedBrand:p.approvedBrand||"",
-        vendor:       p.vendor||"",vendorStockNum:p.vendorStockNum||"",
+        edpNumber:    p.edpNumber||"",
+        approvedBrand:VENDOR_LIST.includes(p.approvedBrand)?p.approvedBrand:"",
+        vendor:       VENDOR_LIST.includes(p.vendor)?p.vendor:"",
+        vendorStockNum:p.vendorStockNum||"",
         coolant:      validCoolants.includes(p.coolant)?p.coolant:"flood",
         centerCutting:!!p.centerCutting,fluteType:p.fluteType||"",cost:p.cost||"",
         tapClass:     p.tapClass||"",pointType:p.pointType||"",
@@ -790,6 +841,11 @@ export default function App(){
   // 12-column grid — all sections use this, fields span N cols
   const G={display:"grid",gridTemplateColumns:"repeat(12,1fr)",gap:5,alignItems:"start"};
   const C=(n)=>({gridColumn:`span ${n}`}); // span helper
+
+  const _vf=getVisibleFields(F.toolType);
+  const visMap=new Map(_vf.map(({key,optional})=>[key,optional]));
+  const isVis=key=>visMap.has(key);
+  const isOpt=key=>visMap.get(key)===true;
 
   return(
     <div style={{fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",background:T.pageBg,minHeight:"100vh",padding:"10px 8px",color:T.text}}>
@@ -877,7 +933,7 @@ export default function App(){
         {/* ── UNIFIED TOOL FORM — 12-column grid throughout ── */}
         <div style={cardStyle}>
 
-          {/* ─ CLASSIFICATION — 2 × span-6 ─ */}
+          {/* ─ CLASSIFICATION — always visible ─ */}
           <GroupDiv label="Classification"/>
           <div style={G}>
             <div style={C(6)}>
@@ -895,17 +951,22 @@ export default function App(){
             </div>
           </div>
 
-          {/* ─ DIMENSIONS — 3 × span-4 per row ─ */}
-          <GroupDiv label="Dimensions"/>
+          {/* ─ DIMENSIONS ─ */}
+          {(isVis("diameter")||isVis("loc")||isVis("oal")||isVis("shankDia")||isVis("shoulderLen")||isVis("ooh")||isVis("cornerRadius")||isVis("tipAngle")||isVis("taperAngle")||isVis("tipDiameter")||isVis("lowerRadius")||isVis("upperRadius")||isVis("profileRadius")||isVis("axialDistance"))&&<GroupDiv label="Dimensions"/>}
           <div style={G}>
-            <div style={C(4)}><FL type="both" label="Diameter (in)"/><DimInput fieldKey="diameter" value={F.diameter} onChange={v=>sf("diameter",v)} placeholder="0.375" hi={hi("diameter")} inputWasMm={inputWasMm}/></div>
-            <div style={C(4)}><FL type="both" label="LOC (in)"/><DimInput fieldKey="loc" value={F.loc} onChange={v=>sf("loc",v)} placeholder="1.5" hi={hi("loc")} inputWasMm={inputWasMm}/></div>
-            <div style={C(4)}><FL type="both" label="OAL (in)"/><DimInput fieldKey="oal" value={F.oal} onChange={v=>sf("oal",v)} placeholder="3.5" hi={hi("oal")} inputWasMm={inputWasMm}/></div>
-            <div style={C(4)}><FL type="both" label="Shank Ø (in)"/><DimInput fieldKey="shankDia" value={F.shankDia} onChange={v=>sf("shankDia",v)} placeholder="0.375" hi={hi("shankDia")} inputWasMm={inputWasMm}/></div>
-            <div style={C(4)}><FL type="both" label="Corner Radius"/><DimInput fieldKey="cornerRadius" value={F.cornerRadius} onChange={v=>sf("cornerRadius",v)} placeholder="0" hi={hi("cornerRadius")} inputWasMm={inputWasMm}/></div>
-            <div style={C(4)}><FL type="both" label="Tip / Point Angle (°)"/><DimInput fieldKey="tipAngle" value={F.tipAngle} onChange={v=>sf("tipAngle",v)} placeholder="135" hi={hi("tipAngle")} inputWasMm={inputWasMm}/></div>
-            {/* Shoulder Length */}
-            <div style={C(4)}>
+            {isVis("diameter")&&<div style={{...C(4),opacity:isOpt("diameter")?0.55:1}}><FL type="both" label="Diameter (in)"/><DimInput fieldKey="diameter" value={F.diameter} onChange={v=>sf("diameter",v)} placeholder="0.375" hi={hi("diameter")} inputWasMm={inputWasMm}/></div>}
+            {isVis("loc")&&<div style={{...C(4),opacity:isOpt("loc")?0.55:1}}><FL type="both" label="LOC (in)"/><DimInput fieldKey="loc" value={F.loc} onChange={v=>sf("loc",v)} placeholder="1.5" hi={hi("loc")} inputWasMm={inputWasMm}/></div>}
+            {isVis("oal")&&<div style={{...C(4),opacity:isOpt("oal")?0.55:1}}><FL type="both" label="OAL (in)"/><DimInput fieldKey="oal" value={F.oal} onChange={v=>sf("oal",v)} placeholder="3.5" hi={hi("oal")} inputWasMm={inputWasMm}/></div>}
+            {isVis("shankDia")&&<div style={{...C(4),opacity:isOpt("shankDia")?0.55:1}}><FL type="both" label="Shank Ø (in)"/><DimInput fieldKey="shankDia" value={F.shankDia} onChange={v=>sf("shankDia",v)} placeholder="0.375" hi={hi("shankDia")} inputWasMm={inputWasMm}/></div>}
+            {isVis("cornerRadius")&&<div style={{...C(4),opacity:isOpt("cornerRadius")?0.55:1}}><FL type="both" label="Corner Radius"/><DimInput fieldKey="cornerRadius" value={F.cornerRadius} onChange={v=>sf("cornerRadius",v)} placeholder="0" hi={hi("cornerRadius")} inputWasMm={inputWasMm}/></div>}
+            {isVis("tipAngle")&&<div style={{...C(4),opacity:isOpt("tipAngle")?0.55:1}}><FL type="both" label="Tip / Point Angle (°)"/><DimInput fieldKey="tipAngle" value={F.tipAngle} onChange={v=>sf("tipAngle",v)} placeholder="135" hi={hi("tipAngle")} inputWasMm={inputWasMm}/></div>}
+            {isVis("taperAngle")&&<div style={{...C(4),opacity:isOpt("taperAngle")?0.55:1}}><FL type="both" label="Taper / Lead Angle (°)"/><DimInput fieldKey="taperAngle" value={F.taperAngle} onChange={v=>sf("taperAngle",v)} placeholder="3" hi={hi("taperAngle")} inputWasMm={inputWasMm}/></div>}
+            {isVis("tipDiameter")&&<div style={{...C(4),opacity:isOpt("tipDiameter")?0.55:1}}><FL type="fusion" label="Tip Diameter (in)"/><DimInput fieldKey="tipDiameter" value={F.tipDiameter} onChange={v=>sf("tipDiameter",v)} placeholder="0" hi={hi("tipDiameter")} inputWasMm={inputWasMm}/></div>}
+            {isVis("lowerRadius")&&<div style={{...C(4),opacity:isOpt("lowerRadius")?0.55:1}}><FL type="fusion" label="Lower Radius (in)"/><DimInput fieldKey="lowerRadius" value={F.lowerRadius} onChange={v=>sf("lowerRadius",v)} placeholder="0" hi={hi("lowerRadius")} inputWasMm={inputWasMm}/></div>}
+            {isVis("upperRadius")&&<div style={{...C(4),opacity:isOpt("upperRadius")?0.55:1}}><FL type="fusion" label="Upper Radius (in)"/><DimInput fieldKey="upperRadius" value={F.upperRadius} onChange={v=>sf("upperRadius",v)} placeholder="0" hi={hi("upperRadius")} inputWasMm={inputWasMm}/></div>}
+            {isVis("profileRadius")&&<div style={{...C(4),opacity:isOpt("profileRadius")?0.55:1}}><FL type="fusion" label="Profile Radius (in)"/><DimInput fieldKey="profileRadius" value={F.profileRadius} onChange={v=>sf("profileRadius",v)} placeholder="0" hi={hi("profileRadius")} inputWasMm={inputWasMm}/></div>}
+            {isVis("axialDistance")&&<div style={{...C(4),opacity:isOpt("axialDistance")?0.55:1}}><FL type="fusion" label="Axial Distance (in)"/><DimInput fieldKey="axialDistance" value={F.axialDistance} onChange={v=>sf("axialDistance",v)} placeholder="0" hi={hi("axialDistance")} inputWasMm={inputWasMm}/></div>}
+            {isVis("shoulderLen")&&<div style={{...C(4),opacity:isOpt("shoulderLen")?0.55:1}}>
               <FL type="fusion" label="Shoulder Length (in)"/>
               <DimInput fieldKey="shoulderLen" value={F.shoulderLen} onChange={v=>sf("shoulderLen",v)}
                 placeholder={F.loc?"≥ "+F.loc+" (= LOC)":"= LOC"}
@@ -914,9 +975,8 @@ export default function App(){
                 return sl&&loc&&sl<loc
                   ?<div style={{fontSize:10,color:T.red,marginTop:2}}>Must be ≥ LOC ({F.loc}) — will use LOC</div>
                   :null;})()}
-            </div>
-            {/* OOH / Length Below Holder */}
-            <div style={C(4)}>
+            </div>}
+            {isVis("ooh")&&<div style={{...C(4),opacity:isOpt("ooh")?0.55:1}}>
               <FL type="both" label="OOH / Length Below Holder (in)"/>
               <DimInput fieldKey="ooh" value={F.ooh} onChange={v=>sf("ooh",v)}
                 placeholder={(()=>{const sl=parseFloat(F.shoulderLen),loc=parseFloat(F.loc);
@@ -929,26 +989,24 @@ export default function App(){
                 return ooh&&shoulder&&ooh<shoulder
                   ?<div style={{fontSize:10,color:T.red,marginTop:2}}>Must be ≥ Shoulder Length — will use Shoulder</div>
                   :null;})()}
-            </div>
-            <div style={C(4)}>{/* spacer */}</div>
+            </div>}
           </div>
 
-          {/* ─ MATERIAL & COATING — 4 × span-3 ─ */}
-          <GroupDiv label="Material & Coating"/>
+          {/* ─ MATERIAL & COATING ─ */}
+          {(isVis("material")||isVis("coating")||isVis("workpieceMats")||isVis("coolant"))&&<GroupDiv label="Material & Coating"/>}
           <div style={G}>
-            <div style={C(3)}>
+            {isVis("material")&&<div style={{...C(3),opacity:isOpt("material")?0.55:1}}>
               <FL type="both" label="Tool Material"/>
               <select style={sel(false)} value={F.material} onChange={e=>sf("material",e.target.value)}>
                 {MA.map(m=><option key={m} value={m} style={{background:T.inputBg}}>{m.charAt(0).toUpperCase()+m.slice(1)}</option>)}
               </select>
-            </div>
-            <div style={C(3)}>
+            </div>}
+            {isVis("coating")&&<div style={{...C(3),opacity:isOpt("coating")?0.55:1}}>
               <FL type="both" label="Coating"/>
-              <select style={sel(hi("coating"))} value={F.coating} onChange={e=>sf("coating",e.target.value)}>
-                {CO.map(c=><option key={c} value={c} style={{background:T.inputBg}}>{c||"— none / UC"}</option>)}
-              </select>
-            </div>
-            <div style={C(3)}>
+              <input style={inp(hi("coating"))} list="coating-opts" value={F.coating} onChange={e=>sf("coating",e.target.value)} placeholder="e.g. AlTiN, TiN, UC"/>
+              <datalist id="coating-opts">{CO.filter(c=>c).map(c=><option key={c} value={c}/>)}</datalist>
+            </div>}
+            {isVis("workpieceMats")&&<div style={{...C(3),opacity:isOpt("workpieceMats")?0.55:1}}>
               <FL type="both" label="Workpiece Mat"/>
               <div style={{border:`1px solid ${(F.workpieceMats&&F.workpieceMats.length)?T.green:T.border}`,borderRadius:"0 0 4px 4px",background:T.inputBg,padding:"3px 6px",minHeight:27,display:"flex",flexWrap:"wrap",gap:"3px 6px",alignItems:"center"}}>
                 {WM.filter(w=>w).map(w=>{
@@ -968,64 +1026,108 @@ export default function App(){
                 {(!F.workpieceMats||!F.workpieceMats.length)&&<span style={{fontSize:10,color:T.sub}}>tap to select</span>}
               </div>
               {F.workpieceMats&&F.workpieceMats.length>1&&<div style={{fontSize:10,color:T.sub,marginTop:2}}>★ primary · others = secondary</div>}
-            </div>
-            <div style={C(3)}>
+            </div>}
+            {isVis("coolant")&&<div style={{...C(3),opacity:isOpt("coolant")?0.55:1}}>
               <FL type="both" label="Coolant"/>
               <select style={sel(hi("coolant"))} value={F.coolant} onChange={e=>sf("coolant",e.target.value)}>
                 {COOLANT_OPTS.map(([v,l])=><option key={v} value={v} style={{background:T.inputBg}}>{l}</option>)}
               </select>
-            </div>
+            </div>}
           </div>
 
-          {/* ─ CUTTING GEOMETRY — 4 × span-3 ─ */}
-          <GroupDiv label="Cutting Geometry"/>
+          {/* ─ CUTTING GEOMETRY ─ */}
+          {(isVis("flutes")||isVis("helixAngle")||isVis("fluteType")||isVis("centerCutting")||isVis("stubJobber")||isVis("cuttingDirection")||isVis("backsideCapable")||isVis("doubleEnded"))&&<GroupDiv label="Cutting Geometry"/>}
           <div style={G}>
-            <div style={C(3)}><FL type="both" label="# Flutes"/><input style={inp(hi("flutes"))} value={F.flutes} onChange={e=>sf("flutes",e.target.value)} placeholder="3"/></div>
-            <div style={C(3)}><FL type="proshop" label="Helix Angle (°)"/><input style={inp(hi("helixAngle"))} value={F.helixAngle} onChange={e=>sf("helixAngle",e.target.value)} placeholder="30"/></div>
-            <div style={C(3)}>
+            {isVis("flutes")&&<div style={{...C(3),opacity:isOpt("flutes")?0.55:1}}><FL type="both" label="# Flutes"/><input style={inp(hi("flutes"))} value={F.flutes} onChange={e=>sf("flutes",e.target.value)} placeholder="3"/></div>}
+            {isVis("helixAngle")&&<div style={{...C(3),opacity:isOpt("helixAngle")?0.55:1}}><FL type="proshop" label="Helix Angle (°)"/><input style={inp(hi("helixAngle"))} value={F.helixAngle} onChange={e=>sf("helixAngle",e.target.value)} placeholder="30"/></div>}
+            {isVis("fluteType")&&<div style={{...C(3),opacity:isOpt("fluteType")?0.55:1}}>
               <FL type="proshop" label="Flute Type"/>
               <select style={sel(hi("fluteType"))} value={FLUTE_TYPE_OPTS.includes(F.fluteType)?F.fluteType:""} onChange={e=>sf("fluteType",e.target.value)}>
                 {FLUTE_TYPE_OPTS.map(o=><option key={o} value={o} style={{background:T.inputBg}}>{o||"—"}</option>)}
               </select>
               {F.fluteType&&!FLUTE_TYPE_OPTS.includes(F.fluteType)&&<div style={{fontSize:10,color:T.amber,marginTop:2}}>AI: "{F.fluteType}"</div>}
-            </div>
-            <div style={C(3)}>
+            </div>}
+            {isVis("centerCutting")&&<div style={{...C(3),opacity:isOpt("centerCutting")?0.55:1}}>
               <FL type="proshop" label="Center Cutting"/>
               <div style={{height:27,display:"flex",alignItems:"center",border:`1px solid ${T.border}`,borderRadius:"0 0 4px 4px",padding:"0 7px",background:T.inputBg}}>
-                <Toggle value={F.centerCutting} onChange={v=>sf("centerCutting",v)} label={F.centerCutting?"Yes":"No"}/>
+                <Toggle value={F.centerCutting} onChange={v=>sf("centerCutting",v)} label={F.centerCutting?"Y":"N"}/>
               </div>
-            </div>
+            </div>}
+            {isVis("stubJobber")&&<div style={{...C(3),opacity:isOpt("stubJobber")?0.55:1}}>
+              <FL type="proshop" label="Length Class"/>
+              <select style={sel(hi("stubJobber"))} value={F.stubJobber} onChange={e=>sf("stubJobber",e.target.value)}>
+                {["","Stub","Jobber"].map(o=><option key={o} value={o} style={{background:T.inputBg}}>{o||"—"}</option>)}
+              </select>
+            </div>}
+            {isVis("cuttingDirection")&&<div style={{...C(3),opacity:isOpt("cuttingDirection")?0.55:1}}>
+              <FL type="proshop" label="Cutting Direction"/>
+              <select style={sel(hi("cuttingDirection"))} value={F.cuttingDirection} onChange={e=>sf("cuttingDirection",e.target.value)}>
+                {["Right Hand","Left Hand"].map(o=><option key={o} value={o} style={{background:T.inputBg}}>{o}</option>)}
+              </select>
+            </div>}
+            {isVis("backsideCapable")&&<div style={{...C(3),opacity:isOpt("backsideCapable")?0.55:1}}>
+              <FL type="proshop" label="Backside Capable"/>
+              <div style={{height:27,display:"flex",alignItems:"center",border:`1px solid ${T.border}`,borderRadius:"0 0 4px 4px",padding:"0 7px",background:T.inputBg}}>
+                <Toggle value={F.backsideCapable} onChange={v=>sf("backsideCapable",v)} label={F.backsideCapable?"Y":"N"}/>
+              </div>
+            </div>}
+            {isVis("doubleEnded")&&<div style={{...C(3),opacity:isOpt("doubleEnded")?0.55:1}}>
+              <FL type="proshop" label="Double Ended"/>
+              <div style={{height:27,display:"flex",alignItems:"center",border:`1px solid ${T.border}`,borderRadius:"0 0 4px 4px",padding:"0 7px",background:T.inputBg}}>
+                <Toggle value={F.doubleEnded} onChange={v=>sf("doubleEnded",v)} label={F.doubleEnded?"Y":"N"}/>
+              </div>
+            </div>}
           </div>
 
-          {/* ─ THREAD & TAP — 3 × span-4 ─ */}
-          <GroupDiv label="Thread & Tap"/>
+          {/* ─ THREAD & TAP ─ */}
+          {(isVis("pitch")||isVis("tapClass")||isVis("pointType")||isVis("minThreadPitch")||isVis("maxThreadPitch")||isVis("fullProfile"))&&<GroupDiv label="Thread & Tap"/>}
           <div style={G}>
-            <div style={C(4)}><FL type="both" label="Pitch / Thread Size"/><input style={inp(hi("pitch"))} value={F.pitch} onChange={e=>sf("pitch",e.target.value)} placeholder="5/16-24"/></div>
-            <div style={C(4)}><FL type="proshop" label="Tap Class (H# / D#)"/><input style={inp(hi("tapClass"))} value={F.tapClass} onChange={e=>sf("tapClass",e.target.value)} placeholder="H5"/></div>
-            <div style={C(4)}>
+            {isVis("pitch")&&<div style={{...C(4),opacity:isOpt("pitch")?0.55:1}}><FL type="both" label="Pitch / Thread Size"/><input style={inp(hi("pitch"))} value={F.pitch} onChange={e=>sf("pitch",e.target.value)} placeholder="5/16-24"/></div>}
+            {isVis("tapClass")&&<div style={{...C(4),opacity:isOpt("tapClass")?0.55:1}}><FL type="proshop" label="Tap Class (H# / D#)"/><input style={inp(hi("tapClass"))} value={F.tapClass} onChange={e=>sf("tapClass",e.target.value)} placeholder="H5"/></div>}
+            {isVis("pointType")&&<div style={{...C(4),opacity:isOpt("pointType")?0.55:1}}>
               <FL type="proshop" label="Point Type"/>
               <select style={sel(hi("pointType"))} value={F.pointType} onChange={e=>sf("pointType",e.target.value)}>
                 {["","Bottoming","Modified Bottoming","Plug","Taper","Spiral Point","Spiral Flute","Forming"].map(o=><option key={o} value={o} style={{background:T.inputBg}}>{o||"—"}</option>)}
               </select>
-            </div>
+            </div>}
+            {isVis("minThreadPitch")&&<div style={{...C(4),opacity:isOpt("minThreadPitch")?0.55:1}}><FL type="both" label="Min Thread Pitch (in)"/><input style={inp(hi("minThreadPitch"))} value={F.minThreadPitch} onChange={e=>sf("minThreadPitch",e.target.value)} placeholder="0.0313"/></div>}
+            {isVis("maxThreadPitch")&&<div style={{...C(4),opacity:isOpt("maxThreadPitch")?0.55:1}}><FL type="both" label="Max Thread Pitch (in)"/><input style={inp(hi("maxThreadPitch"))} value={F.maxThreadPitch} onChange={e=>sf("maxThreadPitch",e.target.value)} placeholder="0.125"/></div>}
+            {isVis("fullProfile")&&<div style={{...C(4),opacity:isOpt("fullProfile")?0.55:1}}>
+              <FL type="proshop" label="Full Profile"/>
+              <div style={{height:27,display:"flex",alignItems:"center",border:`1px solid ${T.border}`,borderRadius:"0 0 4px 4px",padding:"0 7px",background:T.inputBg}}>
+                <Toggle value={F.fullProfile} onChange={v=>sf("fullProfile",v)} label={F.fullProfile?"Y":"N"}/>
+              </div>
+            </div>}
           </div>
 
-          {/* ─ PURCHASING & IDENTITY — 3 × span-4 per row ─ */}
-          <GroupDiv label="Purchasing & Identity"/>
+          {/* ─ PURCHASING & IDENTITY ─ */}
+          {(isVis("edpNumber")||isVis("approvedBrand")||isVis("vendor")||isVis("vendorStockNum")||isVis("cost")||isVis("productLink"))&&<GroupDiv label="Purchasing & Identity"/>}
           <div style={G}>
-            <div style={C(4)}><FL type="both" label="EDP# / Mfr #"/><input style={inp(hi("edpNumber"))} value={F.edpNumber} onChange={e=>sf("edpNumber",e.target.value)} placeholder="e.g. VGM3-0025"/></div>
-            <div style={C(4)}><FL type="proshop" label="Manufacturer / Brand"/><input style={inp(hi("approvedBrand"))} value={F.approvedBrand} onChange={e=>sf("approvedBrand",e.target.value)} placeholder="e.g. OSG, Helical"/></div>
-            <div style={C(4)}><FL type="proshop" label="Vendor / Distributor"/><input style={inp(hi("vendor"))} value={F.vendor} onChange={e=>sf("vendor",e.target.value)} placeholder="e.g. MSC Industrial"/></div>
-            <div style={C(4)}><FL type="proshop" label="Vendor Stock #"/><input style={inp(hi("vendorStockNum"))} value={F.vendorStockNum} onChange={e=>sf("vendorStockNum",e.target.value)} placeholder="e.g. 48667943"/></div>
-            <div style={C(4)}><FL type="proshop" label="Cost / Price ($)"/><input style={inp(hi("cost"))} value={F.cost} onChange={e=>sf("cost",e.target.value)} placeholder="48.99" type="number" step="0.01" min="0"/></div>
-            <div style={C(4)}><FL type="fusion" label="Product Link"/><input style={inp(hi("productLink"))} value={F.productLink} onChange={e=>sf("productLink",e.target.value)} placeholder="https://..."/></div>
+            {isVis("edpNumber")&&<div style={{...C(4),opacity:isOpt("edpNumber")?0.55:1}}><FL type="both" label="EDP# / Mfr #"/><input style={inp(hi("edpNumber"))} value={F.edpNumber} onChange={e=>sf("edpNumber",e.target.value)} placeholder="e.g. VGM3-0025"/></div>}
+            {isVis("approvedBrand")&&<div style={{...C(4),opacity:isOpt("approvedBrand")?0.55:1}}>
+              <FL type="proshop" label="Manufacturer / Brand"/>
+              <select style={sel(hi("approvedBrand"))} value={F.approvedBrand} onChange={e=>sf("approvedBrand",e.target.value)}>
+                <option value="" style={{background:T.inputBg}}>— select —</option>
+                {VENDOR_LIST.map(v=><option key={v} value={v} style={{background:T.inputBg}}>{v}</option>)}
+              </select>
+            </div>}
+            {isVis("vendor")&&<div style={{...C(4),opacity:isOpt("vendor")?0.55:1}}>
+              <FL type="proshop" label="Vendor / Distributor"/>
+              <select style={sel(hi("vendor"))} value={F.vendor} onChange={e=>sf("vendor",e.target.value)}>
+                <option value="" style={{background:T.inputBg}}>— select —</option>
+                {VENDOR_LIST.map(v=><option key={v} value={v} style={{background:T.inputBg}}>{v}</option>)}
+              </select>
+            </div>}
+            {isVis("vendorStockNum")&&<div style={{...C(4),opacity:isOpt("vendorStockNum")?0.55:1}}><FL type="proshop" label="Vendor Stock #"/><input style={inp(hi("vendorStockNum"))} value={F.vendorStockNum} onChange={e=>sf("vendorStockNum",e.target.value)} placeholder="e.g. 48667943"/></div>}
+            {isVis("cost")&&<div style={{...C(4),opacity:isOpt("cost")?0.55:1}}><FL type="proshop" label="Cost / Price ($)"/><input style={inp(hi("cost"))} value={F.cost} onChange={e=>sf("cost",e.target.value)} placeholder="48.99" type="number" step="0.01" min="0"/></div>}
+            {isVis("productLink")&&<div style={{...C(4),opacity:isOpt("productLink")?0.55:1}}><FL type="fusion" label="Product Link"/><input style={inp(hi("productLink"))} value={F.productLink} onChange={e=>sf("productLink",e.target.value)} placeholder="https://..."/></div>}
           </div>
 
-          {/* ─ FUSION ONLY — 2 × span-6 ─ */}
-          <GroupDiv label="Fusion Only"/>
+          {/* ─ FUSION ONLY ─ */}
+          {(isVis("presetName")||isVis("toolNumber"))&&<GroupDiv label="Fusion Only"/>}
           <div style={G}>
-            <div style={C(6)}><FL type="fusion" label="Preset Name"/><input style={inp(false)} value={F.presetName} onChange={e=>sf("presetName",e.target.value)} placeholder="e.g. AL"/></div>
-            <div style={C(6)}><FL type="fusion" label="Tool # / Pocket"/><input style={inp(false)} value={F.toolNumber} onChange={e=>sf("toolNumber",e.target.value)} placeholder="e.g. 10"/></div>
+            {isVis("presetName")&&<div style={{...C(6),opacity:isOpt("presetName")?0.55:1}}><FL type="fusion" label="Preset Name"/><input style={inp(false)} value={F.presetName} onChange={e=>sf("presetName",e.target.value)} placeholder="e.g. AL"/></div>}
+            {isVis("toolNumber")&&<div style={{...C(6),opacity:isOpt("toolNumber")?0.55:1}}><FL type="fusion" label="Tool # / Pocket"/><input style={inp(false)} value={F.toolNumber} onChange={e=>sf("toolNumber",e.target.value)} placeholder="e.g. 10"/></div>}
           </div>
 
           {/* ─ AUTO-DERIVED ─ */}
